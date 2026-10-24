@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\Indexa.Dominio\Indexa.Dominio.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,41 @@
+@base = http://localhost:5080
+@token = cole-o-token-do-login-aqui
+
+### Registrar
+POST {{base}}/api/auth/registrar
+Content-Type: application/json
+
+{ "nome": "Adriano", "email": "adriano@exemplo.com", "senha": "uma-senha-longa-123" }
+
+### Login
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "adriano@exemplo.com", "senha": "uma-senha-longa-123" }
+
+### Criar cliente
+POST {{base}}/api/clientes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "nome": "Imobiliária Exemplo", "documento": "12.ABC.345/01DE-35", "email": "contato@exemplo.com" }
+
+### Criar contrato IPCA com teto de 10%
+POST {{base}}/api/contratos
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "clienteId": "COLE-O-ID-DO-CLIENTE",
+  "descricao": "Aluguel sala 101",
+  "valorInicial": 2500.00,
+  "dataBase": "2025-03-10",
+  "tipoIndice": "Ipca",
+  "teto": 10,
+  "unidadeLimite": "Percentual",
+  "naoReduzir": true
+}
+
+### Listar contratos
+GET {{base}}/api/contratos?busca=sala&tipoIndice=Ipca&status=Ativo&pagina=1&tamanhoPagina=20
+Authorization: Bearer {{token}}
