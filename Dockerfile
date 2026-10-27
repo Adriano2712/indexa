@@ -1,6 +1,8 @@
 # Uma imagem: API + painel React (servido pela própria API) + jobs Hangfire.
+# Multi-arquitetura (amd64/arm64): as etapas de build rodam na arquitetura da máquina e
+# compilam para a de destino, sem emulação (VMs ARM da Oracle Cloud, por exemplo).
 
-FROM node:22-alpine AS painel
+FROM --platform=$BUILDPLATFORM node:22-alpine AS painel
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
@@ -9,13 +11,14 @@ COPY web/ ./
 # vite.config.ts publica em ../src/Indexa.Api/wwwroot
 RUN npm run build
 
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS api
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS api
+ARG TARGETARCH
 WORKDIR /src
 COPY global.json Directory.Build.props ./
 COPY src/ src/
-RUN dotnet publish src/Indexa.Api -c Release -o /app
+RUN dotnet publish src/Indexa.Api -c Release -a "$TARGETARCH" --self-contained false -o /app
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=api /app .
 COPY --from=painel /src/Indexa.Api/wwwroot ./wwwroot

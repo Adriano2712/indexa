@@ -67,7 +67,9 @@ builder.Services.AddHangfire((sp, h) => h
     .UseRecommendedSerializerSettings()
     .UsePostgreSqlStorage(
         pg => pg.UseNpgsqlConnection(ConnectionString(sp)),
-        new PostgreSqlStorageOptions { SchemaName = "hangfire", PrepareSchemaIfNecessary = true }));
+        new PostgreSqlStorageOptions { SchemaName = "hangfire", PrepareSchemaIfNecessary = true })
+    .UseFilter(new AlertaFalhaJobs(sp.GetRequiredService<IServiceScopeFactory>(), sp.GetRequiredService<ILogger<AlertaFalhaJobs>>())));
+builder.Services.AddScoped<ServicoAlertas>();
 if (config.GetValue("Hangfire:Servidor", true))
     builder.Services.AddHangfireServer(o => o.WorkerCount = config.GetValue("Hangfire:Workers", 2));
 
@@ -76,6 +78,16 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
     .Configure<IOptions<JwtOptions>, TimeProvider>((o, jwt, relogio) =>
     {
         o.MapInboundClaims = false;
+        // Painel: token no cookie HttpOnly (fora do alcance de JavaScript). Clientes de API: header Authorization.
+        o.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = ctx =>
+            {
+                if (string.IsNullOrEmpty(ctx.Request.Headers.Authorization))
+                    ctx.Token = ctx.Request.Cookies[AuthEndpoints.CookieSessao];
+                return Task.CompletedTask;
+            },
+        };
         o.TokenValidationParameters = new TokenValidationParameters
         {
             ValidIssuer = jwt.Value.Emissor,

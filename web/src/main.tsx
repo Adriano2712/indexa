@@ -1,7 +1,7 @@
-import { StrictMode } from 'react';
+import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { sessaoAtual } from './api';
+import { usuarioAtual, type Usuario } from './api';
 import { Layout } from './paginas/Layout';
 import { Login } from './paginas/Login';
 import { Painel } from './paginas/Painel';
@@ -12,7 +12,14 @@ import { Configuracoes } from './paginas/Configuracoes';
 import './estilos.css';
 
 function Protegido() {
-  return sessaoAtual() ? <Layout /> : <Navigate to="/login" replace />;
+  const [usuario, setUsuario] = useState<Usuario | null | undefined>(undefined);
+
+  useEffect(() => {
+    void usuarioAtual().then(setUsuario);
+  }, []);
+
+  if (usuario === undefined) return null;
+  return usuario ? <Layout usuario={usuario} /> : <Navigate to="/login" replace />;
 }
 
 createRoot(document.getElementById('raiz')!).render(

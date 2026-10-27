@@ -102,8 +102,16 @@ As decisões de cálculo (ADR-01 a 07) modelam cláusulas contratuais comuns, ma
 - **Custo de reverter:** baixo (é só uma imagem Docker e um Postgres).
 - **Gatilho:** mais de um servidor de aplicação (PDFs vão para object storage, `IArmazenamentoDocumentos`), ou backup gerenciado exigido.
 
-### ADR-14 · .NET 8 agora, .NET 10 em seguida
-- **Decisão:** código em `net8.0` (SDK disponível no ambiente de desenvolvimento); `global.json` com `rollForward: latestMajor`. O CI já compila com o SDK mais novo do runner (C# 14).
-- **Motivo:** o .NET 8 sai de suporte em 10/11/2026; o .NET 10 é LTS.
-- **Custo de reverter:** não se aplica; a migração é trocar `TargetFramework` e as versões 8.0.x dos pacotes.
-- **Gatilho:** antes do primeiro deploy público.
+### ADR-14 · .NET 10 (LTS)
+- **Decisão:** `net10.0`, pacotes 10.0.x, `global.json` em 10.0 com `rollForward: latestFeature`. O projeto começou em .NET 8 (SDK disponível no início) e migrou antes do deploy.
+- **Alternativas:** ficar no .NET 8.
+- **Motivo:** o .NET 8 sai de suporte em 10/11/2026; o .NET 10 é LTS. A migração não exigiu mudança de código nem de modelo (EF sem migração pendente).
+- **Custo de reverter:** baixo.
+- **Gatilho:** próximo LTS.
+
+### ADR-15 · Sessão do painel em cookie HttpOnly
+- **Decisão:** o login grava o JWT num cookie `HttpOnly`, `SameSite=Strict` e `Secure`; a API aceita o cookie ou o header `Authorization`.
+- **Alternativas:** token no `localStorage` (versão inicial); sessão no servidor.
+- **Motivo:** uma falha de XSS não consegue ler o token; `SameSite=Strict` cobre CSRF sem token anti-CSRF, porque painel e API estão na mesma origem.
+- **Custo de reverter:** baixo.
+- **Gatilho:** necessidade de revogar sessões no servidor (lista de tokens revogados ou sessão persistida).

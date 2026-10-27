@@ -1,8 +1,8 @@
-const CHAVE_SESSAO = 'indexa.sessao';
+// Sessão em cookie HttpOnly definido pela API no login: o JavaScript da página nunca vê o token.
 
-interface Sessao {
-  token: string;
-  expiraEm: string;
+export interface Usuario {
+  id: string;
+  nome: string;
   email: string;
 }
 
@@ -16,38 +16,17 @@ export class ErroApi extends Error {
   }
 }
 
-export function sessaoAtual(): Sessao | null {
-  try {
-    const bruto = localStorage.getItem(CHAVE_SESSAO);
-    if (!bruto) return null;
-    const sessao = JSON.parse(bruto) as Sessao;
-    return new Date(sessao.expiraEm) > new Date() ? sessao : null;
-  } catch {
-    return null;
-  }
-}
-
-export function salvarSessao(sessao: Sessao) {
-  localStorage.setItem(CHAVE_SESSAO, JSON.stringify(sessao));
-}
-
-export function encerrarSessao() {
-  localStorage.removeItem(CHAVE_SESSAO);
-}
-
 async function requisitar(caminho: string, opcoes: RequestInit = {}): Promise<Response> {
-  const sessao = sessaoAtual();
   const resposta = await fetch(`/api${caminho}`, {
     ...opcoes,
+    credentials: 'same-origin',
     headers: {
       ...(opcoes.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(sessao ? { Authorization: `Bearer ${sessao.token}` } : {}),
       ...opcoes.headers,
     },
   });
 
   if (resposta.status === 401 && !caminho.startsWith('/auth/')) {
-    encerrarSessao();
     window.location.assign('/login');
   }
   if (!resposta.ok) {
@@ -65,7 +44,17 @@ export async function api<T>(caminho: string, opcoes: RequestInit = {}): Promise
 export const enviar = <T>(metodo: 'POST' | 'PUT', caminho: string, corpo?: unknown) =>
   api<T>(caminho, { method: metodo, body: corpo === undefined ? undefined : JSON.stringify(corpo) });
 
-/** PDF protegido por token: baixa como blob e abre numa aba. */
+export async function usuarioAtual(): Promise<Usuario | null> {
+  try {
+    return await api<Usuario>('/auth/eu');
+  } catch {
+    return null;
+  }
+}
+
+export const sair = () => enviar('POST', '/auth/sair');
+
+/** PDF protegido: baixa como blob (cookie vai junto) e abre numa aba. */
 export async function abrirArquivo(caminho: string) {
   const resposta = await requisitar(caminho);
   const url = URL.createObjectURL(await resposta.blob());

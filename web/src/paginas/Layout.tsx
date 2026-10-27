@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { encerrarSessao, sessaoAtual } from '../api';
+import { sair, type Usuario } from '../api';
 
 const ITENS = [
   { para: '/', rotulo: 'Painel', fim: true },
@@ -7,9 +7,9 @@ const ITENS = [
   { para: '/configuracoes', rotulo: 'Configurações', fim: false },
 ];
 
-export function Layout() {
+export function Layout({ usuario }: { usuario: Usuario }) {
   const navegar = useNavigate();
-  const email = sessaoAtual()?.email;
+  const email = usuario.email;
 
   return (
     <div className="app">
@@ -32,8 +32,7 @@ export function Layout() {
           <button
             className="botao botao-fantasma"
             onClick={() => {
-              encerrarSessao();
-              navegar('/login');
+              void sair().finally(() => navegar('/login'));
             }}
           >
             Sair

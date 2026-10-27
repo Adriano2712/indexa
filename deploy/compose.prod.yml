@@ -1,7 +1,9 @@
-# Produção numa VM única (ADR-0013): API + Postgres + Caddy (HTTPS automático via Let's Encrypt).
-# Uso na VM: cp .env.example .env  (preencher)  &&  docker compose -f deploy/compose.prod.yml --env-file .env up -d --build
+# Produção numa VM única (ADR-13): API + Postgres + Caddy (HTTPS automático) + backup diário.
+# Primeira instalação: deploy/instalar.sh. Atualizar depois:
+#   docker compose -f deploy/compose.prod.yml --env-file deploy/.env pull && docker compose -f deploy/compose.prod.yml --env-file deploy/.env up -d
 services:
   api:
+    image: ${IMAGEM:-ghcr.io/adriano2712/indexa:latest}
     build: ..
     restart: unless-stopped
     environment:
@@ -10,6 +12,7 @@ services:
       Auth__PermitirRegistro: ${PERMITIR_REGISTRO:-false}
       Banco__AplicarMigracoesAoIniciar: "true"
       Hangfire__Painel: "false"
+      Alertas__Email: ${ALERTAS_EMAIL}
       Smtp__Host: ${SMTP_HOST}
       Smtp__Porta: ${SMTP_PORTA:-587}
       Smtp__Usuario: ${SMTP_USUARIO}
@@ -35,6 +38,32 @@ services:
       test: ["CMD-SHELL", "pg_isready -U indexa -d indexa"]
       interval: 10s
       retries: 10
+
+  # pg_dump diário (formato custom) em deploy/backups, com retenção. Restauração: ver README.
+  backup:
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      RETENCAO_DIAS: ${BACKUP_RETENCAO_DIAS:-14}
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          arquivo=/backups/indexa-$$(date +%Y%m%d-%H%M).dump
+          if pg_dump -h postgres -U indexa -d indexa -Fc -f "$$arquivo"; then
+            echo "backup ok: $$arquivo"
+          else
+            echo "backup FALHOU"; rm -f "$$arquivo"
+          fi
+          find /backups -name 'indexa-*.dump' -mtime +$${RETENCAO_DIAS} -delete
+          sleep 86400
+        done
 
   caddy:
     image: caddy:2.8-alpine

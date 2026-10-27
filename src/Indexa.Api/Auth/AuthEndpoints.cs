@@ -12,11 +12,39 @@ public static class AuthEndpoints
     public sealed record UsuarioResponse(Guid Id, string Nome, string Email);
     public sealed record TokenResponse(string Token, DateTimeOffset ExpiraEm);
 
+    public const string CookieSessao = "indexa_sessao";
+
     public static void MapAuth(this IEndpointRouteBuilder app)
     {
         var grupo = app.MapGroup("/api/auth").AllowAnonymous();
         grupo.MapPost("/registrar", Registrar);
         grupo.MapPost("/login", Login).RequireRateLimiting("login");
+        grupo.MapPost("/sair", Sair);
+        app.MapGet("/api/auth/eu", Eu).RequireAuthorization();
+    }
+
+    // SameSite=Strict: o navegador não envia o cookie em requisições originadas de outro site (proteção contra CSRF).
+    private static CookieOptions OpcoesCookie(IHostEnvironment ambiente, DateTimeOffset? expira) => new()
+    {
+        HttpOnly = true,
+        Secure = !ambiente.IsDevelopment(),
+        SameSite = SameSiteMode.Strict,
+        Path = "/",
+        Expires = expira,
+        IsEssential = true,
+    };
+
+    private static IResult Sair(HttpContext ctx, IHostEnvironment ambiente)
+    {
+        ctx.Response.Cookies.Delete(CookieSessao, OpcoesCookie(ambiente, null));
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> Eu(System.Security.Claims.ClaimsPrincipal user, IndexaDbContext db, CancellationToken ct)
+    {
+        var id = user.UsuarioId();
+        var usuario = await db.Usuarios.AsNoTracking().SingleOrDefaultAsync(u => u.Id == id, ct);
+        return usuario is null ? Results.Unauthorized() : Results.Ok(new UsuarioResponse(usuario.Id, usuario.Nome, usuario.Email));
     }
 
     private static async Task<IResult> Registrar(
@@ -38,7 +66,8 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> Login(
-        LoginRequest req, IndexaDbContext db, IPasswordHasher<Usuario> hasher, EmissorToken emissor, CancellationToken ct)
+        LoginRequest req, IndexaDbContext db, IPasswordHasher<Usuario> hasher, EmissorToken emissor, HttpContext ctx,
+        IHostEnvironment ambiente, CancellationToken ct)
     {
         var email = Usuario.NormalizarEmail(req.Email);
         var usuario = email is null ? null : await db.Usuarios.SingleOrDefaultAsync(u => u.Email == email, ct);
@@ -58,6 +87,7 @@ public static class AuthEndpoints
         }
 
         var (token, expiraEm) = emissor.Emitir(usuario);
+        ctx.Response.Cookies.Append(CookieSessao, token, OpcoesCookie(ambiente, expiraEm));
         return Results.Ok(new TokenResponse(token, expiraEm));
     }
 }

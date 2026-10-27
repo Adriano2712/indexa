@@ -60,9 +60,7 @@ public sealed class CartaReajustePdf : IPdfGenerator
                 t.Span("Cliente: ").SemiBold();
                 t.Span(d.ClienteDocumento is null ? d.ClienteNome : $"{d.ClienteNome} ({d.ClienteDocumento})");
             });
-            c.Item().Text(
-                $"Conforme as cláusulas do contrato, o valor será reajustado a partir de {Data(d.Aniversario)}, " +
-                $"passando de {Moeda(d.ValorAntigo)} para {Moeda(d.ValorNovo)}.");
+            c.Item().Text(Comunicado(d));
 
             c.Item().Table(t =>
             {
@@ -110,6 +108,16 @@ public sealed class CartaReajustePdf : IPdfGenerator
                 $"Não substitui aditivo assinado pelas partes. Ref. {d.ReajusteId}").FontSize(8).FontColor(Colors.Grey.Darken1);
         });
     })).GeneratePdf();
+
+    /// <summary>Vigência já passada na data de emissão (ex.: reajuste retroativo) é descrita no passado.</summary>
+    public static string Comunicado(DadosCartaReajuste d)
+    {
+        var emitidaEm = Comum.Relogio.DataEmBrasilia(d.GeradoEm);
+        var valores = $"passando de {Moeda(d.ValorAntigo)} para {Moeda(d.ValorNovo)}";
+        return d.Aniversario <= emitidaEm
+            ? $"Conforme as cláusulas do contrato, o valor foi reajustado a partir de {Data(d.Aniversario)}, {valores}."
+            : $"Conforme as cláusulas do contrato, o valor será reajustado a partir de {Data(d.Aniversario)}, {valores}.";
+    }
 
     private static void Linha(TableDescriptor t, string rotulo, string valor)
     {

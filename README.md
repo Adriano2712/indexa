@@ -3,6 +3,9 @@
 Sistema web que controla contratos recorrentes e calcula o reajuste anual **na data certa, com o índice oficial**: IPCA, IGP-M ou percentual fixo, respeitando teto, piso e cláusula de não redução. Avisa o responsável antes do aniversário com a carta de reajuste em PDF e guarda um histórico imutável para auditoria.
 
 [![CI](https://github.com/Adriano2712/indexa/actions/workflows/ci.yml/badge.svg)](https://github.com/Adriano2712/indexa/actions/workflows/ci.yml)
+[![Imagem](https://github.com/Adriano2712/indexa/actions/workflows/imagem.yml/badge.svg)](https://github.com/Adriano2712/indexa/actions/workflows/imagem.yml)
+
+**Stack:** .NET 10 (ASP.NET Core, EF Core) · PostgreSQL · Hangfire · QuestPDF · React 19 + TypeScript · Docker · GitHub Actions
 
 > **Deploy:** ainda não publicado. Os arquivos de produção estão em [`deploy/`](deploy/) (ver [Deploy](#deploy)).
 
@@ -130,10 +133,20 @@ O CI (GitHub Actions) roda formatação, build com avisos como erro, verificaç�
 | Falha no envio do e-mail | 5 tentativas (1 min → 1 h). Esgotadas: notificação `Falhou`, job em *Failed* no painel do Hangfire e contador no painel do Indexa. |
 | Processo morre no meio do envio | A reserva expira em 15 min e o envio é refeito (garantia de "pelo menos uma vez"); o `Message-ID` fixo permite ao cliente de e-mail descartar a duplicata. |
 | Fuso horário | Aniversários, avisos e jobs usam o calendário de Brasília (`America/Sao_Paulo`). |
+| Job esgota as tentativas | Filtro global do Hangfire envia e-mail para `ALERTAS_EMAIL` com o job e o erro. |
+| Perda do servidor | `pg_dump` diário em `deploy/backups` com retenção configurável (14 dias por padrão). |
+
+## Segurança
+
+- Senhas com PBKDF2 (`PasswordHasher` do ASP.NET Core) e limite de tentativas de login por IP.
+- Sessão do painel em **cookie `HttpOnly` + `SameSite=Strict` + `Secure`**: o JavaScript da página nunca vê o token, e requisições vindas de outros sites não levam o cookie. Clientes de API usam `Authorization: Bearer`.
+- Cada usuário só enxerga os próprios clientes, contratos e cartas (testado).
+- Segredos só por variável de ambiente ou user-secrets; o CI barra pacote com vulnerabilidade conhecida.
+- Dados pessoais mínimos (LGPD): nome e, opcionalmente, CPF/CNPJ e e-mail do cliente.
 
 ## Como rodar
 
-Pré-requisitos: .NET SDK 8+, Node 22+, Docker.
+Pré-requisitos: .NET SDK 10, Node 22+, Docker.
 
 ```bash
 docker compose up -d                       # Postgres (porta 5433) e Mailpit (caixa de entrada em http://localhost:8026)
@@ -148,16 +161,31 @@ Na primeira execução, dispare o job **coleta-indices** em `/hangfire`. Ele bai
 
 ## Deploy
 
-Uma VM com Docker Compose: um container com API, painel e jobs, mais Postgres e Caddy (HTTPS automático). O motivo e as alternativas estão na [ADR-13](docs/adr.md#adr-13--deploy-uma-vm-com-docker-compose).
+Uma VM com Docker Compose: um container com API, painel e jobs, mais Postgres, Caddy (HTTPS automático) e backup diário. O motivo e as alternativas estão na [ADR-13](docs/adr.md#adr-13--deploy-uma-vm-com-docker-compose). A cada push na `main` com CI verde, o GitHub Actions publica a imagem `ghcr.io/adriano2712/indexa` para amd64 e arm64.
 
+1. Crie uma VM Ubuntu (x86 ou ARM), libere as portas 80 e 443 no firewall do provedor e aponte um domínio (registro A) para o IP dela.
+2. Tenha uma conta SMTP (Amazon SES, Resend ou outra) com o domínio de envio verificado.
+3. Na VM:
+   ```bash
+   git clone https://github.com/Adriano2712/indexa.git && cd indexa
+   bash deploy/instalar.sh      # 1ª vez: instala o Docker e cria deploy/.env com senhas geradas
+   nano deploy/.env             # DOMINIO, SMTP_*, ALERTAS_EMAIL
+   bash deploy/instalar.sh      # sobe tudo
+   ```
+4. Para os usuários do beta criarem conta, `PERMITIR_REGISTRO=true`, rode o script de novo e volte para `false` depois.
+
+Atualizar: `docker compose -f deploy/compose.prod.yml --env-file deploy/.env pull && docker compose -f deploy/compose.prod.yml --env-file deploy/.env up -d`.
+
+Restaurar um backup:
 ```bash
-cp deploy/.env.example deploy/.env          # preencher domínio, senhas, chave JWT e SMTP
-docker compose -f deploy/compose.prod.yml --env-file deploy/.env up -d --build
+docker compose -f deploy/compose.prod.yml --env-file deploy/.env exec -T postgres \
+  pg_restore -U indexa -d indexa --clean --if-exists < deploy/backups/indexa-AAAAMMDD-HHMM.dump
 ```
+Os backups ficam na própria VM; para sobreviver à perda dela, copie `deploy/backups` para fora periodicamente (por exemplo, `rclone` para um bucket).
 
 ## Decisões e limites do MVP
 
-- Decisões registradas em [`docs/adr.md`](docs/adr.md) (14 ADRs: regras de cálculo, idempotência, imutabilidade, deploy).
+- Decisões registradas em [`docs/adr.md`](docs/adr.md) (15 ADRs: regras de cálculo, idempotência, imutabilidade, sessão, deploy).
 - As regras de cálculo modelam cláusulas comuns; **não são parecer jurídico**. O texto de cada contrato prevalece.
 - Fora do MVP: múltiplos usuários por empresa, importação por planilha, assinatura digital do aditivo, cobrança, app mobile, integração com sistemas de imobiliária.
-- Próximos passos técnicos: migrar para .NET 10 (LTS), PDFs em object storage para escalar horizontalmente, backup automatizado do Postgres, autenticação no painel do Hangfire em produção.
+- Próximos passos técnicos: PDFs em object storage para escalar além de um servidor; revogação de sessão no servidor (hoje "sair" apaga o cookie e o token expira em 60 min); painel do Hangfire autenticado em produção (hoje desligado; falhas chegam por e-mail).

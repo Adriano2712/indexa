@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { enviar, salvarSessao } from '../api';
+import { enviar } from '../api';
 import { Campo, camposDoErro, mensagemDoErro } from '../comum';
 
 export function Login() {
@@ -20,8 +20,7 @@ export function Login() {
     setCampos({});
     try {
       if (modo === 'cadastrar') await enviar('POST', '/auth/registrar', { nome, email, senha });
-      const r = await enviar<{ token: string; expiraEm: string }>('POST', '/auth/login', { email, senha });
-      salvarSessao({ ...r, email: email.trim().toLowerCase() });
+      await enviar('POST', '/auth/login', { email, senha });   // a API grava o cookie de sessão
       navegar('/');
     } catch (ex) {
       setErro(mensagemDoErro(ex));

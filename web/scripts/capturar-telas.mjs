@@ -20,7 +20,7 @@ async function chamar(metodo, caminho, corpo, token) {
 }
 
 await chamar('POST', '/auth/registrar', { nome: 'Marina Duarte', email, senha });
-const { token, expiraEm } = await chamar('POST', '/auth/login', { email, senha });
+const { token } = await chamar('POST', '/auth/login', { email, senha });
 await chamar('PUT', '/configuracoes', { antecedenciaAvisoDias: 40, emailAviso: null, avisoEmailAtivo: true }, token);
 
 // Clientes e contratos fictícios.
@@ -53,7 +53,8 @@ async function foto(caminho, arquivo, esperar) {
 }
 
 await foto('/login', '0-login.png', 'form');
-await pagina.evaluate(([t, e, m]) => localStorage.setItem('indexa.sessao', JSON.stringify({ token: t, expiraEm: e, email: m })), [token, expiraEm, email]);
+// Mesma sessão que o login criaria: cookie HttpOnly com o token.
+await pagina.context().addCookies([{ name: 'indexa_sessao', value: token, url: BASE, httpOnly: true, sameSite: 'Strict' }]);
 await foto('/', '1-painel.png', '.metricas');
 await foto('/contratos', '2-contratos.png', '.tabela');
 await foto('/contratos/novo', '3-novo-contrato.png', '.formulario');
