@@ -36,7 +36,15 @@ public static class ContratoEndpoints
         Guid Id, Guid ClienteId, string ClienteNome, string Descricao, decimal ValorInicial, decimal ValorAtual, DateOnly DataBase,
         TipoIndice TipoIndice, decimal? PercentualFixo, int PeriodicidadeMeses, int DefasagemMeses, decimal? Teto, decimal? Piso,
         UnidadeLimite? UnidadeLimite, bool NaoReduzir, StatusContrato Status, int UltimoCicloAplicado, DateTimeOffset CriadoEm,
-        DateTimeOffset AtualizadoEm);
+        DateTimeOffset AtualizadoEm, DateOnly? ProximoAniversario)
+    {
+        public ContratoResponse ComProximoAniversario() => this with
+        {
+            ProximoAniversario = Status == StatusContrato.Ativo
+                ? Calendario.Aniversario(DataBase, UltimoCicloAplicado + 1, PeriodicidadeMeses)
+                : null,
+        };
+    }
 
     public sealed record ReajusteResponse(
         Guid Id, int Ciclo, int Revisao, DateOnly DataAniversario, decimal ValorAntigo, decimal? ValorNovo,
@@ -103,7 +111,7 @@ public static class ContratoEndpoints
     private static readonly Expression<Func<Contrato, ContratoResponse>> Projecao = c => new ContratoResponse(
         c.Id, c.ClienteId, c.Cliente!.Nome, c.Descricao, c.ValorInicial, c.ValorAtual, c.DataBase, c.TipoIndice, c.PercentualFixo,
         c.PeriodicidadeMeses, c.DefasagemMeses, c.Teto, c.Piso, c.UnidadeLimite, c.NaoReduzir, c.Status, c.UltimoCicloAplicado,
-        c.CriadoEm, c.AtualizadoEm);
+        c.CriadoEm, c.AtualizadoEm, null);
 
     private static async Task<IResult> Listar(
         ClaimsPrincipal user, IndexaDbContext db, string? busca, TipoIndice? tipoIndice, StatusContrato? status,
@@ -125,7 +133,7 @@ public static class ContratoEndpoints
         var itens = await q.OrderBy(c => c.Cliente!.Nome).ThenBy(c => c.Descricao).ThenBy(c => c.Id)
             .Skip((numero - 1) * tamanho).Take(tamanho)
             .Select(Projecao).ToListAsync(ct);
-        return Results.Ok(new Pagina<ContratoResponse>(itens, total, numero, tamanho));
+        return Results.Ok(new Pagina<ContratoResponse>(itens.Select(i => i.ComProximoAniversario()).ToList(), total, numero, tamanho));
     }
 
     private static async Task<IResult> Obter(Guid id, ClaimsPrincipal user, IndexaDbContext db, CancellationToken ct)
@@ -217,6 +225,7 @@ public static class ContratoEndpoints
     private static IResult ClienteNaoEncontrado() =>
         Results.ValidationProblem(new Dictionary<string, string[]> { ["clienteId"] = ["Cliente não encontrado."] });
 
-    private static Task<ContratoResponse?> ProjetarAsync(IndexaDbContext db, Guid id, Guid usuarioId, CancellationToken ct) =>
-        db.Contratos.AsNoTracking().Where(c => c.Id == id && c.Cliente!.UsuarioId == usuarioId).Select(Projecao).SingleOrDefaultAsync(ct);
+    private static async Task<ContratoResponse?> ProjetarAsync(IndexaDbContext db, Guid id, Guid usuarioId, CancellationToken ct) =>
+        (await db.Contratos.AsNoTracking().Where(c => c.Id == id && c.Cliente!.UsuarioId == usuarioId).Select(Projecao).SingleOrDefaultAsync(ct))
+        ?.ComProximoAniversario();
 }

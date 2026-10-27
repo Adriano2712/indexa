@@ -402,6 +402,33 @@ public sealed class ReajustesTests(ApiReajustesFactory api) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Painel_resume_proximos_e_historico_do_usuario()
+    {
+        var (http, cliente, _) = await NovoUsuarioAsync();
+        var antigo = await CriarAsync(http, cliente, "2024-02-10");       // 2 retroativos; próximo em 10/02/2027
+        var proximo = await CriarAsync(http, cliente, "2025-11-05");      // calculado, aniversário em 12 dias
+        await CriarAsync(http, cliente, "2025-12-20");                     // fora da antecedência
+        var (outro, clienteOutro, _) = await NovoUsuarioAsync();
+        await CriarAsync(outro, clienteOutro, "2025-11-05");                // não pode aparecer
+
+        var painel = await http.GetFromJsonAsync<Painel.PainelEndpoints.PainelResponse>("/api/painel", Auxiliares.Json);
+
+        Assert.Equal(D(2026, 10, 24), painel!.Hoje);
+        Assert.Equal(3, painel.ContratosAtivos);
+        Assert.Equal(2732.54m + 2500m + 2500m, painel.ValorMensalAtivo);
+        Assert.Equal(1, painel.ReajustesProximos30Dias);
+        Assert.Equal(D(2026, 9, 1), painel.UltimoIpca);
+
+        var primeiro = painel.Proximos[0];
+        Assert.Equal((proximo.Id, 12, 2614.40m, StatusReajuste.Calculado), (primeiro.ContratoId, primeiro.DiasRestantes, primeiro.ValorNovo, primeiro.Status));
+        Assert.Equal([proximo.Id, painel.Proximos[1].ContratoId, antigo.Id], painel.Proximos.Select(p => p.ContratoId));
+        Assert.Null(painel.Proximos[1].Status);   // fora da antecedência: ainda sem reajuste
+
+        Assert.Equal([2732.54m, 2620.78m], painel.Historico.Select(h => h.ValorNovo));
+        Assert.All(painel.Historico, h => Assert.Equal(antigo.Id, h.ContratoId));
+    }
+
+    [Fact]
     public async Task Carta_de_outro_usuario_nao_e_acessivel()
     {
         var (http, cliente, _) = await NovoUsuarioAsync();

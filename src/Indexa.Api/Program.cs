@@ -12,6 +12,7 @@ using Indexa.Api.Dados;
 using Indexa.Api.Documentos;
 using Indexa.Api.Indices;
 using Indexa.Api.Jobs;
+using Indexa.Api.Painel;
 using Indexa.Api.Reajustes;
 using Indexa.Dominio;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -114,6 +115,11 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+// Painel React compilado em wwwroot: mesma origem da API (sem CORS) e um container só.
+// Estáticos antes do roteamento; senão o fallback do SPA "casa" antes e /assets/*.js volta como index.html.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
@@ -138,6 +144,9 @@ api.MapClientes();
 api.MapContratos();
 api.MapIndices();
 api.MapReajustes();
+api.MapPainel();
+
+app.MapFallbackToFile("{*rota:regex(^(?!api/|hangfire).*$)}", "index.html");
 
 app.Run();
 

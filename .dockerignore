@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+**/node_modules/
+src/Indexa.Api/wwwroot/
+src/Indexa.Api/armazenamento/
+tests/
+docs/
+.git/
+.github/
+.vs/
+TestResults/
+.env
