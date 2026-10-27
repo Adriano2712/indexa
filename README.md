@@ -20,6 +20,33 @@ Imobiliárias pequenas, administradoras de condomínio, escritórios de contabil
 
 O Indexa automatiza a coleta do índice, o cálculo, o aviso e o registro.
 
+## Como funciona
+
+Você cadastra o contrato uma vez: valor, data de início, índice e as cláusulas de teto, piso ou não redução. A partir daí o sistema trabalha sozinho.
+
+**De onde vêm os números.** Nada é estimado. Os índices são baixados da API pública do Banco Central (SGS): IPCA (IBGE, série 433) e IGP-M (FGV, série 189), publicados como variação mensal. O mesmo contrato, com os mesmos índices, sempre dá o mesmo resultado, e cada carta de reajuste lista os meses e percentuais usados.
+
+**Rotinas automáticas** (horário de Brasília):
+
+| Rotina | Quando | O que faz |
+|---|---|---|
+| Coleta de índices | todo dia, 10h e 18h | Busca IPCA e IGP-M novos no Banco Central e detecta se algum mês foi revisado pela fonte. |
+| Processamento | todo dia, 7h | Para cada contrato ativo, avança o próximo reajuste se for a hora. |
+| Envio de avisos | logo após o cálculo | Envia o e-mail com o novo valor e a carta em PDF; tenta de novo se falhar. |
+
+**Caminho de um contrato até o reajuste:**
+
+1. Fora da antecedência de aviso (15 dias por padrão, ajustável em Configurações), nada acontece ainda.
+2. Ao entrar na antecedência, o sistema verifica se todos os meses do período já foram publicados. Se falta algum, o reajuste fica **Aguardando índice** e é verificado de novo no dia seguinte. Nunca há cálculo com dado incompleto.
+3. Com os índices completos, calcula o novo valor, aplica as cláusulas e envia o aviso ao responsável.
+4. No dia do aniversário, aplica o reajuste: o valor atual do contrato muda e o próximo ciclo parte dele.
+
+**Contratos antigos.** Ao cadastrar um contrato que começou no passado, os reajustes que já deveriam ter ocorrido são calculados na hora como **retroativos** (sem e-mail), e o valor atual já fica correto.
+
+**Histórico.** Cada reajuste guarda o valor antigo, o valor novo, os índices e as cláusulas usados, a regra aplicada e as datas. Depois de comunicado, não pode ser alterado; uma correção gera um novo registro.
+
+Para ver as rotinas rodando sem esperar o horário: painel `/hangfire` → *Recurring jobs* → *Trigger now*.
+
 ## Telas
 
 | Painel | Contratos |
