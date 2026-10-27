@@ -39,7 +39,7 @@ jobs:
 
       # Testcontainers usa o Docker já disponível no runner (Postgres e Mailpit).
       - name: Testes
-        run: dotnet test --no-build -c Release --logger "trx" --results-directory TestResults
+        run: dotnet test --no-build -c Release --logger "trx" --logger "GitHubActions;summary-include-passed=false" --results-directory TestResults
 
       - name: Publicar resultados
         if: always()
@@ -47,3 +47,24 @@ jobs:
         with:
           name: resultados-testes
           path: TestResults/*.trx
+
+  painel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Instalar
+        run: npm ci
+
+      - name: Typecheck e build
+        run: npm run build
