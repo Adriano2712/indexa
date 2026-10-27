@@ -44,6 +44,8 @@ public sealed class Contrato
     public StatusContrato Status { get; private set; }
     public DateTimeOffset CriadoEm { get; private set; }
     public DateTimeOffset AtualizadoEm { get; private set; }
+    public int UltimoCicloAplicado { get; private set; }
+    public uint Versao { get; private set; }
 
     public static Contrato Criar(DadosContrato dados, DateTimeOffset agora)
     {
@@ -64,26 +66,40 @@ public sealed class Contrato
         return campos;
     }
 
-    public void Atualizar(DadosContrato dados, bool possuiReajustes, DateTimeOffset agora)
+    /// <summary>
+    /// Campos de base só mudam enquanto o histórico é todo retroativo (gerado no cadastro e nunca comunicado).
+    /// Nesse caso o valor volta ao inicial e o chamador deve substituir os reajustes antigos e recalcular.
+    /// </summary>
+    /// <returns>true se data-base, valor inicial ou periodicidade mudaram.</returns>
+    public bool Atualizar(DadosContrato dados, bool possuiReajustesComunicados, DateTimeOffset agora)
     {
         if (Status == StatusContrato.Encerrado)
             throw new RegraDeNegocioException("Contrato encerrado não pode ser alterado.");
 
         Validar(dados);
 
-        if (possuiReajustes)
-        {
-            var bloqueados = CamposDeBaseAlterados(dados);
-            if (bloqueados.Count > 0)
-                throw new RegraDeNegocioException(
-                    $"O contrato já possui reajustes; não é possível alterar: {string.Join(", ", bloqueados)}.");
-        }
-        else
-        {
-            ValorAtual = dados.ValorInicial;
-        }
+        var bloqueados = CamposDeBaseAlterados(dados);
+        if (possuiReajustesComunicados && bloqueados.Count > 0)
+            throw new RegraDeNegocioException(
+                $"O contrato já possui reajustes comunicados; não é possível alterar: {string.Join(", ", bloqueados)}.");
 
         Aplicar(dados, agora);
+        if (bloqueados.Count == 0) return false;
+
+        ValorAtual = ValorInicial;
+        UltimoCicloAplicado = 0;
+        return true;
+    }
+
+    public void AplicarReajuste(int ciclo, decimal valorNovo, DateTimeOffset agora)
+    {
+        if (ciclo != UltimoCicloAplicado + 1)
+            throw new RegraDeNegocioException($"Reajuste fora de ordem: esperado ciclo {UltimoCicloAplicado + 1}, recebido {ciclo}.");
+        if (valorNovo <= 0) throw new ArgumentOutOfRangeException(nameof(valorNovo));
+
+        ValorAtual = valorNovo;
+        UltimoCicloAplicado = ciclo;
+        AtualizadoEm = agora;
     }
 
     public void Encerrar(DateTimeOffset agora)

@@ -122,13 +122,13 @@ public sealed class BancoTests(ApiFactory api)
         await api.ComBancoAsync(async db =>
         {
             db.Reajustes.Add(reajuste);
-            db.Notificacoes.Add(Notificacao.Pendente(reajuste.Id, CanalNotificacao.Email, DateTimeOffset.UtcNow));
+            db.Notificacoes.Add(Notificacao.Pendente(reajuste.Id, CanalNotificacao.Email, "dono@teste.com", DateTimeOffset.UtcNow));
             await db.SaveChangesAsync();
         });
 
         var ex = await Assert.ThrowsAsync<DbUpdateException>(() => api.ComBancoAsync(async db =>
         {
-            db.Notificacoes.Add(Notificacao.Pendente(reajuste.Id, CanalNotificacao.Email, DateTimeOffset.UtcNow));
+            db.Notificacoes.Add(Notificacao.Pendente(reajuste.Id, CanalNotificacao.Email, "dono@teste.com", DateTimeOffset.UtcNow));
             await db.SaveChangesAsync();
         }));
 

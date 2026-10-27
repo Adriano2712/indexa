@@ -1,5 +1,6 @@
 using Indexa.Api.Comum;
 using Indexa.Api.Dados;
+using Indexa.Api.Reajustes;
 using Indexa.Dominio;
 using Microsoft.EntityFrameworkCore;
 using Polly.CircuitBreaker;
@@ -11,7 +12,7 @@ public sealed record ResultadoColeta(
     TipoIndice Tipo, bool Sucesso, int Inseridos, int Revisados, DateOnly? UltimoMesDisponivel, string? Erro);
 
 public sealed class ServicoColetaIndices(
-    IIndexProvider fonte, IndexaDbContext db, TimeProvider relogio, ILogger<ServicoColetaIndices> log)
+    IIndexProvider fonte, IndexaDbContext db, ServicoReajustes reajustes, TimeProvider relogio, ILogger<ServicoColetaIndices> log)
 {
     public static readonly TipoIndice[] IndicesColetados = [TipoIndice.Ipca, TipoIndice.IgpM];
     public static readonly DateOnly InicioCargaHistorica = new(1994, 1, 1);
@@ -49,7 +50,8 @@ public sealed class ServicoColetaIndices(
             .Where(v => v.TipoIndice == tipo && v.MesReferencia >= desde)
             .ToDictionaryAsync(v => v.MesReferencia, ct);
 
-        int inseridos = 0, revisados = 0;
+        var inseridos = 0;
+        var divergencias = new List<DivergenciaIndice>();
         foreach (var publicado in publicados.Where(p => p.MesReferencia <= mesAtual))
         {
             if (!existentes.TryGetValue(publicado.MesReferencia, out var guardado))
@@ -61,13 +63,15 @@ public sealed class ServicoColetaIndices(
             {
                 log.LogWarning("Índice {Tipo} {Mes:yyyy-MM} revisado pela fonte: {Anterior} → {Novo}.",
                     tipo, publicado.MesReferencia, guardado.Valor, publicado.Variacao);
-                db.DivergenciasIndice.Add(guardado.Revisar(publicado.Variacao, fonte.Fonte, agora));
-                revisados++;
+                var divergencia = guardado.Revisar(publicado.Variacao, fonte.Fonte, agora);
+                db.DivergenciasIndice.Add(divergencia);
+                divergencias.Add(divergencia);
             }
         }
 
         await db.SaveChangesAsync(ct);
-        return new ResultadoColeta(tipo, true, inseridos, revisados, await UltimoMesAsync(tipo, ct), null);
+        if (divergencias.Count > 0) await reajustes.TratarRevisaoDeIndiceAsync(divergencias, ct);
+        return new ResultadoColeta(tipo, true, inseridos, divergencias.Count, await UltimoMesAsync(tipo, ct), null);
     }
 
     private Task<DateOnly?> UltimoMesAsync(TipoIndice tipo, CancellationToken ct) =>

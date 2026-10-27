@@ -20,6 +20,12 @@ internal static class Paginacao
         "%" + termo.Trim().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
 }
 
+public static class ExcecoesBanco
+{
+    public static bool EhViolacaoDeUnicidade(this DbUpdateException ex) =>
+        ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
+}
+
 internal sealed class TratadorExcecoes(IProblemDetailsService problemDetails) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext ctx, Exception ex, CancellationToken ct)
@@ -27,10 +33,12 @@ internal sealed class TratadorExcecoes(IProblemDetailsService problemDetails) : 
         ProblemDetails? pd = ex switch
         {
             DadosInvalidosException d => new HttpValidationProblemDetails(d.Erros)
-                { Status = StatusCodes.Status400BadRequest, Title = "Dados inválidos." },
+            { Status = StatusCodes.Status400BadRequest, Title = "Dados inválidos." },
             BadHttpRequestException b => new ProblemDetails { Status = b.StatusCode, Title = "Requisição inválida." },
             RegraDeNegocioException r => new ProblemDetails
-                { Status = StatusCodes.Status409Conflict, Title = "Operação não permitida.", Detail = r.Message },
+            { Status = StatusCodes.Status409Conflict, Title = "Operação não permitida.", Detail = r.Message },
+            DbUpdateConcurrencyException => new ProblemDetails
+            { Status = StatusCodes.Status409Conflict, Title = "O registro foi alterado ao mesmo tempo por outro processo. Tente novamente." },
             DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } } =>
                 new ProblemDetails { Status = StatusCodes.Status409Conflict, Title = "Registro duplicado." },
             _ => null,

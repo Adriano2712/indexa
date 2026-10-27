@@ -22,7 +22,12 @@ public sealed class ValorIndiceMensal
 
         return new ValorIndiceMensal
         {
-            Id = Guid.NewGuid(), TipoIndice = tipo, MesReferencia = mesReferencia, Valor = valor, Fonte = fonte, ColetadoEm = agora,
+            Id = Guid.NewGuid(),
+            TipoIndice = tipo,
+            MesReferencia = mesReferencia,
+            Valor = valor,
+            Fonte = fonte,
+            ColetadoEm = agora,
         };
     }
 
@@ -54,10 +59,25 @@ public sealed class DivergenciaIndice
     public decimal ValorNovo { get; private set; }
     public string Fonte { get; private set; } = "";
     public DateTimeOffset DetectadaEm { get; private set; }
+    /// <summary>Algum reajuste já notificado/aplicado usou o valor antigo: exige revisão humana (não é reescrito).</summary>
+    public bool AfetaReajusteEmitido { get; private set; }
+    public int ReajustesRecalculados { get; private set; }
+
+    public void RegistrarImpacto(bool afetaReajusteEmitido, int recalculados)
+    {
+        AfetaReajusteEmitido = afetaReajusteEmitido;
+        ReajustesRecalculados = recalculados;
+    }
 
     internal static DivergenciaIndice Registrar(
         TipoIndice tipo, DateOnly mes, decimal anterior, decimal novo, string fonte, DateTimeOffset agora) => new()
-    {
-        Id = Guid.NewGuid(), TipoIndice = tipo, MesReferencia = mes, ValorAnterior = anterior, ValorNovo = novo, Fonte = fonte, DetectadaEm = agora,
-    };
+        {
+            Id = Guid.NewGuid(),
+            TipoIndice = tipo,
+            MesReferencia = mes,
+            ValorAnterior = anterior,
+            ValorNovo = novo,
+            Fonte = fonte,
+            DetectadaEm = agora,
+        };
 }

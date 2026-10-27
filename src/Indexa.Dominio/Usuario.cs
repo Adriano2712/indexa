@@ -12,6 +12,26 @@ public sealed class Usuario
     public string Email { get; private set; } = "";
     public string SenhaHash { get; private set; } = "";
     public DateTimeOffset CriadoEm { get; private set; }
+    public int AntecedenciaAvisoDias { get; private set; } = AntecedenciaPadrao;
+    /// <summary>Se nulo, o aviso vai para o e-mail de login.</summary>
+    public string? EmailAviso { get; private set; }
+    public bool AvisoEmailAtivo { get; private set; } = true;
+
+    public const int AntecedenciaPadrao = 15;
+    public string DestinatarioAviso => EmailAviso ?? Email;
+
+    public void AtualizarPreferencias(int antecedenciaDias, string? emailAviso, bool avisoEmailAtivo)
+    {
+        var email = NormalizarEmail(emailAviso);
+        var erros = new ColetorErros();
+        erros.Se(antecedenciaDias is < 1 or > 90, "antecedenciaAvisoDias", "Antecedência deve estar entre 1 e 90 dias.");
+        erros.Se(email is not null && !Validacao.EmailValido(email), "emailAviso", "E-mail inválido.");
+        erros.LancarSeHouver();
+
+        AntecedenciaAvisoDias = antecedenciaDias;
+        EmailAviso = email;
+        AvisoEmailAtivo = avisoEmailAtivo;
+    }
 
     public static string? NormalizarEmail(string? email) => Validacao.NormalizarEmail(email);
 

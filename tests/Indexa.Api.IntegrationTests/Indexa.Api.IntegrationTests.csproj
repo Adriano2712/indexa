@@ -18,5 +18,6 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <ProjectReference Include="..\..\src\Indexa.Api\Indexa.Api.csproj" />
+    <None Include="..\Indexa.Calculo.Tests\Dados\*.json" Link="Dados\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -111,6 +111,9 @@ namespace Indexa.Api.Dados.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<int>("UltimoCicloAplicado")
+                        .HasColumnType("integer");
+
                     b.Property<string>("UnidadeLimite")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
@@ -122,6 +125,12 @@ namespace Indexa.Api.Dados.Migrations
                     b.Property<decimal>("ValorInicial")
                         .HasPrecision(14, 2)
                         .HasColumnType("numeric(14,2)");
+
+                    b.Property<uint>("Versao")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id");
 
@@ -138,6 +147,9 @@ namespace Indexa.Api.Dados.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("AfetaReajusteEmitido")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset>("DetectadaEm")
                         .HasColumnType("timestamp with time zone");
 
@@ -148,6 +160,9 @@ namespace Indexa.Api.Dados.Migrations
 
                     b.Property<DateOnly>("MesReferencia")
                         .HasColumnType("date");
+
+                    b.Property<int>("ReajustesRecalculados")
+                        .HasColumnType("integer");
 
                     b.Property<string>("TipoIndice")
                         .IsRequired()
@@ -183,7 +198,15 @@ namespace Indexa.Api.Dados.Migrations
                     b.Property<DateTimeOffset>("CriadoEm")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Destinatario")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
                     b.Property<DateTimeOffset?>("EnviadaEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("EnviandoDesde")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("ReajusteId")
@@ -201,7 +224,15 @@ namespace Indexa.Api.Dados.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<uint>("Versao")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Status");
 
                     b.HasIndex("ReajusteId", "Canal")
                         .IsUnique();
@@ -215,6 +246,12 @@ namespace Indexa.Api.Dados.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("AplicadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("CalculadoEm")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("CaminhoPdf")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -226,6 +263,9 @@ namespace Indexa.Api.Dados.Migrations
 
                     b.Property<int>("Ciclo")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ClausulasJson")
+                        .HasColumnType("jsonb");
 
                     b.Property<Guid>("ContratoId")
                         .HasColumnType("uuid");
@@ -241,11 +281,17 @@ namespace Indexa.Api.Dados.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("IndicesUsadosJson")
+                        .HasColumnType("jsonb");
+
                     b.Property<DateOnly?>("JanelaFim")
                         .HasColumnType("date");
 
                     b.Property<DateOnly?>("JanelaInicio")
                         .HasColumnType("date");
+
+                    b.Property<DateTimeOffset?>("NotificadoEm")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal?>("PercentualAcumulado")
                         .HasColumnType("numeric");
@@ -279,6 +325,12 @@ namespace Indexa.Api.Dados.Migrations
                         .HasPrecision(14, 2)
                         .HasColumnType("numeric(14,2)");
 
+                    b.Property<uint>("Versao")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ChaveIdempotencia")
@@ -302,11 +354,25 @@ namespace Indexa.Api.Dados.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int>("AntecedenciaAvisoDias")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(15);
+
+                    b.Property<bool>("AvisoEmailAtivo")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<DateTimeOffset>("CriadoEm")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Email")
                         .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
+                    b.Property<string>("EmailAviso")
                         .HasMaxLength(254)
                         .HasColumnType("character varying(254)");
 

@@ -65,15 +65,6 @@ public sealed class ColetaEsimulacaoTests(ApiFactory api) : IAsyncLifetime
             s.AddSingleton<TimeProvider>(new RelogioFixo(Agora));
         }));
 
-    // O token precisa sair do relógio real: a validação de expiração do JwtBearer usa o relógio do sistema, não o TimeProvider.
-    private async Task<HttpClient> ClienteAutenticadoAsync(Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> app)
-    {
-        var autenticado = await api.CriarClienteAutenticadoAsync();
-        var http = app.CreateClient();
-        http.DefaultRequestHeaders.Authorization = autenticado.DefaultRequestHeaders.Authorization;
-        return http;
-    }
-
     private async Task<IReadOnlyList<ResultadoColeta>> ColetarAsync(Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> app)
     {
         using var scope = app.Services.CreateScope();
@@ -144,7 +135,8 @@ public sealed class ColetaEsimulacaoTests(ApiFactory api) : IAsyncLifetime
     {
         await using var app = ComFonteFalsa();
         await ColetarAsync(app);
-        var http = await ClienteAutenticadoAsync(app);
+        // O token sai do relógio falso e é validado com o mesmo relógio (LifetimeValidator usa o TimeProvider).
+        var http = await app.CriarClienteAutenticadoAsync();
         var corpo = Auxiliares.ContratoIpca(await http.CriarClienteAsync());
         corpo["dataBase"] = "2024-02-10";
         var contrato = await http.CriarContratoAsync(corpo);
@@ -169,16 +161,17 @@ public sealed class ColetaEsimulacaoTests(ApiFactory api) : IAsyncLifetime
     public async Task Endpoints_de_indices_listam_valores_e_divergencias()
     {
         await using var app = ComFonteFalsa();
-        var http = await ClienteAutenticadoAsync(app);
+        await ColetarAsync(app);
+        var http = await app.CriarClienteAutenticadoAsync();
 
-        var coleta = await http.PostAsync("/api/indices/coletar", null);
         var valores = await http.GetFromJsonAsync<List<IndiceEndpoints.ValorIndiceResponse>>(
             "/api/indices/Ipca?desde=2025-01-01&ate=2025-03-01", Auxiliares.Json);
         var divergencias = await http.GetAsync("/api/indices/divergencias");
 
-        Assert.Equal(HttpStatusCode.OK, coleta.StatusCode);
         Assert.Equal([0.16m, 1.31m, 0.56m], valores!.Select(v => v.Variacao));
         Assert.Equal(HttpStatusCode.OK, divergencias.StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await app.CreateClient().PostAsync("/api/indices/coletar", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await app.CreateClient().GetAsync("/api/indices/Ipca")).StatusCode);
+        // A coleta deixou de ser endpoint: roda só como job (a rota GET /indices/{tipo} casa, mas não aceita POST).
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, (await http.PostAsync("/api/indices/coletar", null)).StatusCode);
     }
 }

@@ -14,5 +14,12 @@ services:
       interval: 5s
       retries: 10
 
+  # SMTP falso para desenvolvimento: tudo que a API envia aparece em http://localhost:8026
+  mailpit:
+    image: axllent/mailpit:v1.31.6
+    ports:
+      - "${INDEXA_SMTP_PORTA:-1026}:1025"
+      - "${INDEXA_MAILPIT_UI:-8026}:8025"
+
 volumes:
   indexa-pg:

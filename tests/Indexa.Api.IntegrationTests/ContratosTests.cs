@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Indexa.Api.Comum;
 using Indexa.Api.Contratos;
 using Indexa.Dominio;
+using Microsoft.EntityFrameworkCore;
 
 namespace Indexa.Api.IntegrationTests;
 
@@ -150,21 +151,29 @@ public sealed class ContratosTests(ApiFactory api)
     }
 
     [Fact]
-    public async Task Com_reajuste_existente_bloqueia_data_base_mas_permite_mudar_clausulas()
+    public async Task Com_reajuste_comunicado_bloqueia_data_base_mas_permite_mudar_clausulas()
     {
         var http = await api.CriarClienteAutenticadoAsync();
         var corpo = Auxiliares.ContratoIpca(await http.CriarClienteAsync());
         var contrato = await http.CriarContratoAsync(corpo);
         await api.ComBancoAsync(async db =>
         {
-            db.Reajustes.Add(Reajuste.NovoAguardandoIndice(contrato.Id, 1, new DateOnly(2026, 3, 10), 2500m, true, "teste", DateTimeOffset.UtcNow));
+            // Reajuste não retroativo já aplicado = já produziu efeito para o cliente.
+            var agora = DateTimeOffset.UtcNow;
+            var c = await db.Contratos.SingleAsync(x => x.Id == contrato.Id);
+            var r = Reajuste.NovoAguardandoIndice(c.Id, 1, c.DataBase.AddMonths(12), 2500m, false, "teste", agora);
+            r.RegistrarCalculo(2600m, 4m, 4m, null, null, RegraAplicada.PercentualFixo, "[]", "{}", agora);
+            r.Aplicar(agora);
+            c.AplicarReajuste(1, 2600m, agora);
+            db.Reajustes.Add(r);
             await db.SaveChangesAsync();
         });
 
-        corpo["dataBase"] = "2025-04-10";
+        var dataBase = (string)corpo["dataBase"]!;
+        corpo["dataBase"] = DateOnly.Parse(dataBase).AddMonths(1).ToString("yyyy-MM-dd");
         var bloqueado = await http.PutAsJsonAsync($"/api/contratos/{contrato.Id}", corpo);
 
-        corpo["dataBase"] = "2025-03-10";
+        corpo["dataBase"] = dataBase;
         corpo["teto"] = 8m;
         corpo["unidadeLimite"] = "Percentual";
         var permitido = await http.PutAsJsonAsync($"/api/contratos/{contrato.Id}", corpo);
@@ -174,9 +183,10 @@ public sealed class ContratosTests(ApiFactory api)
 
         var detalhe = await http.GetFromJsonAsync<ContratoEndpoints.ContratoDetalheResponse>($"/api/contratos/{contrato.Id}", Auxiliares.Json);
         Assert.Equal(8m, detalhe!.Contrato.Teto);
+        Assert.Equal(2600m, detalhe.Contrato.ValorAtual);
         var reajuste = Assert.Single(detalhe.Reajustes);
-        Assert.Equal(StatusReajuste.AguardandoIndice, reajuste.Status);
-        Assert.True(reajuste.Retroativo);
+        Assert.Equal(StatusReajuste.Aplicado, reajuste.Status);
+        Assert.False(reajuste.Retroativo);
     }
 
     [Fact]

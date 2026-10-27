@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-e-testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restaurar
+        run: dotnet restore
+
+      - name: Formatação (lint)
+        run: dotnet format --verify-no-changes --no-restore --verbosity minimal
+
+      - name: Build (avisos são erros)
+        run: dotnet build --no-restore -c Release
+
+      - name: Pacotes vulneráveis
+        run: |
+          dotnet list package --vulnerable --include-transitive | tee vulneraveis.txt
+          ! grep -q "tem os pacotes vulneráveis\|has the following vulnerable packages" vulneraveis.txt
+
+      # Testcontainers usa o Docker já disponível no runner (Postgres e Mailpit).
+      - name: Testes
+        run: dotnet test --no-build -c Release --logger "trx" --results-directory TestResults
+
+      - name: Publicar resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-testes
+          path: TestResults/*.trx

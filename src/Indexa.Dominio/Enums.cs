@@ -12,4 +12,4 @@ public enum RegraAplicada { Indice = 1, PercentualFixo = 2, Teto = 3, Piso = 4, 
 
 public enum CanalNotificacao { Email = 1, Telegram = 2 }
 
-public enum StatusNotificacao { Pendente = 1, Enviada = 2, Falhou = 3 }
+public enum StatusNotificacao { Pendente = 1, Enviada = 2, Falhou = 3, Enviando = 4, Cancelada = 5 }

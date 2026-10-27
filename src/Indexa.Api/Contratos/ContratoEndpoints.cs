@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Indexa.Api.Auth;
 using Indexa.Api.Comum;
 using Indexa.Api.Dados;
+using Indexa.Api.Reajustes;
 using Indexa.Calculo;
 using Indexa.Dominio;
 using Microsoft.EntityFrameworkCore;
@@ -34,7 +35,8 @@ public static class ContratoEndpoints
     public sealed record ContratoResponse(
         Guid Id, Guid ClienteId, string ClienteNome, string Descricao, decimal ValorInicial, decimal ValorAtual, DateOnly DataBase,
         TipoIndice TipoIndice, decimal? PercentualFixo, int PeriodicidadeMeses, int DefasagemMeses, decimal? Teto, decimal? Piso,
-        UnidadeLimite? UnidadeLimite, bool NaoReduzir, StatusContrato Status, DateTimeOffset CriadoEm, DateTimeOffset AtualizadoEm);
+        UnidadeLimite? UnidadeLimite, bool NaoReduzir, StatusContrato Status, int UltimoCicloAplicado, DateTimeOffset CriadoEm,
+        DateTimeOffset AtualizadoEm);
 
     public sealed record ReajusteResponse(
         Guid Id, int Ciclo, int Revisao, DateOnly DataAniversario, decimal ValorAntigo, decimal? ValorNovo,
@@ -100,7 +102,8 @@ public static class ContratoEndpoints
 
     private static readonly Expression<Func<Contrato, ContratoResponse>> Projecao = c => new ContratoResponse(
         c.Id, c.ClienteId, c.Cliente!.Nome, c.Descricao, c.ValorInicial, c.ValorAtual, c.DataBase, c.TipoIndice, c.PercentualFixo,
-        c.PeriodicidadeMeses, c.DefasagemMeses, c.Teto, c.Piso, c.UnidadeLimite, c.NaoReduzir, c.Status, c.CriadoEm, c.AtualizadoEm);
+        c.PeriodicidadeMeses, c.DefasagemMeses, c.Teto, c.Piso, c.UnidadeLimite, c.NaoReduzir, c.Status, c.UltimoCicloAplicado,
+        c.CriadoEm, c.AtualizadoEm);
 
     private static async Task<IResult> Listar(
         ClaimsPrincipal user, IndexaDbContext db, string? busca, TipoIndice? tipoIndice, StatusContrato? status,
@@ -142,7 +145,8 @@ public static class ContratoEndpoints
     }
 
     private static async Task<IResult> Criar(
-        ContratoRequest req, ClaimsPrincipal user, IndexaDbContext db, TimeProvider relogio, CancellationToken ct)
+        ContratoRequest req, ClaimsPrincipal user, IndexaDbContext db, ServicoReajustes reajustes, TimeProvider relogio,
+        ILogger<ContratoRequest> log, CancellationToken ct)
     {
         var usuarioId = user.UsuarioId();
         var contrato = Contrato.Criar(req.ParaDados(), relogio.GetUtcNow());
@@ -151,26 +155,44 @@ public static class ContratoEndpoints
 
         db.Contratos.Add(contrato);
         await db.SaveChangesAsync(ct);
+        await ProcessarSemFalharAsync(reajustes, contrato.Id, "cadastro", log, ct);
         return Results.Created($"/api/contratos/{contrato.Id}", await ProjetarAsync(db, contrato.Id, usuarioId, ct));
     }
 
     private static async Task<IResult> Atualizar(
-        Guid id, ContratoRequest req, ClaimsPrincipal user, IndexaDbContext db, TimeProvider relogio, CancellationToken ct)
+        Guid id, ContratoRequest req, ClaimsPrincipal user, IndexaDbContext db, ServicoReajustes reajustes, TimeProvider relogio,
+        ILogger<ContratoRequest> log, CancellationToken ct)
     {
         var usuarioId = user.UsuarioId();
         var contrato = await db.Contratos.SingleOrDefaultAsync(c => c.Id == id && c.Cliente!.UsuarioId == usuarioId, ct);
         if (contrato is null) return Results.NotFound();
 
         var dados = req.ParaDados();
-        var possuiReajustes = await db.Reajustes.AnyAsync(r => r.ContratoId == id, ct);
+        var comunicados = await ServicoReajustes.PossuiReajustesComunicadosAsync(db, id, ct);
         var clienteAnterior = contrato.ClienteId;
-        contrato.Atualizar(dados, possuiReajustes, relogio.GetUtcNow());
+        var baseAlterada = contrato.Atualizar(dados, comunicados, relogio.GetUtcNow());
 
         if (dados.ClienteId != clienteAnterior && !await ClientePertenceAoUsuarioAsync(db, dados.ClienteId, usuarioId, ct))
             return ClienteNaoEncontrado();
 
+        if (baseAlterada) await reajustes.SubstituirHistoricoAsync(id, ct);
         await db.SaveChangesAsync(ct);
+        await ProcessarSemFalharAsync(reajustes, id, "edicao", log, ct);
         return Results.Ok(await ProjetarAsync(db, id, usuarioId, ct));
+    }
+
+    // O contrato já está salvo; se o cálculo falhar agora, o job diário retoma. Não devolve 500 por isso.
+    private static async Task ProcessarSemFalharAsync(
+        ServicoReajustes reajustes, Guid contratoId, string origem, ILogger log, CancellationToken ct)
+    {
+        try
+        {
+            await reajustes.ProcessarContratoAsync(contratoId, origem, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            log.LogError(ex, "Processamento imediato do contrato {Contrato} falhou; o job diário vai retomar.", contratoId);
+        }
     }
 
     private static async Task<IResult> Encerrar(Guid id, ClaimsPrincipal user, IndexaDbContext db, TimeProvider relogio, CancellationToken ct)
@@ -180,6 +202,11 @@ public static class ContratoEndpoints
         if (contrato is null) return Results.NotFound();
 
         contrato.Encerrar(relogio.GetUtcNow());
+        var avisosPendentes = await db.Notificacoes
+            .Where(n => (n.Status == StatusNotificacao.Pendente || n.Status == StatusNotificacao.Falhou) &&
+                        db.Reajustes.Any(r => r.Id == n.ReajusteId && r.ContratoId == id))
+            .ToListAsync(ct);
+        foreach (var aviso in avisosPendentes) aviso.Cancelar();
         await db.SaveChangesAsync(ct);
         return Results.Ok(await ProjetarAsync(db, id, usuarioId, ct));
     }

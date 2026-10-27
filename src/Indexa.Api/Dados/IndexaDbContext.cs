@@ -22,6 +22,9 @@ public sealed class IndexaDbContext(DbContextOptions<IndexaDbContext> options) :
             e.Property(x => x.Nome).HasMaxLength(200).IsRequired();
             e.Property(x => x.Email).HasMaxLength(254).IsRequired();
             e.Property(x => x.SenhaHash).HasMaxLength(500).IsRequired();
+            e.Property(x => x.EmailAviso).HasMaxLength(254);
+            e.Property(x => x.AntecedenciaAvisoDias).HasDefaultValue(Usuario.AntecedenciaPadrao);
+            e.Property(x => x.AvisoEmailAtivo).HasDefaultValue(true);
             e.HasIndex(x => x.Email).IsUnique();
         });
 
@@ -49,6 +52,8 @@ public sealed class IndexaDbContext(DbContextOptions<IndexaDbContext> options) :
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
             e.HasOne(x => x.Cliente).WithMany().HasForeignKey(x => x.ClienteId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(x => x.Status);
+            // uint + IsRowVersion → coluna de sistema xmin do Postgres (controle otimista de concorrência).
+            e.Property(x => x.Versao).IsRowVersion();
         });
 
         b.Entity<Reajuste>(e =>
@@ -64,6 +69,9 @@ public sealed class IndexaDbContext(DbContextOptions<IndexaDbContext> options) :
             e.Property(x => x.GeradoPor).HasMaxLength(100).IsRequired();
             e.Property(x => x.ChaveIdempotencia).HasMaxLength(100).IsRequired();
             e.Property(x => x.CaminhoPdf).HasMaxLength(500);
+            e.Property(x => x.IndicesUsadosJson).HasColumnType("jsonb");
+            e.Property(x => x.ClausulasJson).HasColumnType("jsonb");
+            e.Property(x => x.Versao).IsRowVersion();
             e.HasOne<Contrato>().WithMany().HasForeignKey(x => x.ContratoId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Reajuste>().WithMany().HasForeignKey(x => x.SubstituiReajusteId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(x => x.ChaveIdempotencia).IsUnique();
@@ -100,6 +108,9 @@ public sealed class IndexaDbContext(DbContextOptions<IndexaDbContext> options) :
             e.Property(x => x.Canal).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.UltimoErro).HasMaxLength(2000);
+            e.Property(x => x.Destinatario).HasMaxLength(254).IsRequired();
+            e.Property(x => x.Versao).IsRowVersion();
+            e.HasIndex(x => x.Status);
             e.HasOne<Reajuste>().WithMany().HasForeignKey(x => x.ReajusteId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(x => new { x.ReajusteId, x.Canal }).IsUnique();
         });
