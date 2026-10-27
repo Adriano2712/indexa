@@ -5,7 +5,7 @@ namespace Indexa.Api.Documentos;
 
 public sealed class ArmazenamentoOptions
 {
-    public string Pasta { get; set; } = "dados/documentos";
+    public string Pasta { get; set; } = "armazenamento/documentos";
 }
 
 public sealed class ArmazenamentoLocal(IOptions<ArmazenamentoOptions> opcoes, IHostEnvironment ambiente) : IArmazenamentoDocumentos

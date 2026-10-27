@@ -5,4 +5,7 @@ obj/
 *.user
 TestResults/
 .env
-dados/
+/src/Indexa.Api/armazenamento/
+src/Indexa.Api/wwwroot/
+web/node_modules/
+web/test-results/
