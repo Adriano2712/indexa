@@ -74,5 +74,5 @@ public sealed class PropriedadesTests
     // O motor sempre multiplica em ordem cronológica (determinístico); aqui garantimos que a diferença é irrelevante.
     [Property(Arbitrary = [typeof(Geradores)], MaxTest = 500)]
     public bool Ordem_dos_meses_so_afeta_digitos_irrelevantes(Cenario c) =>
-        decimal.Round(MotorReajuste.Acumular(c.Variacoes), 20) == decimal.Round(MotorReajuste.Acumular(c.Variacoes.Reverse()), 20);
+        decimal.Round(MotorReajuste.Acumular(c.Variacoes), 20) == decimal.Round(MotorReajuste.Acumular(Enumerable.Reverse(c.Variacoes)), 20);
 }
